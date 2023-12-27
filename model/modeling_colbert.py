@@ -34,19 +34,26 @@ class ColBERT(BertPreTrainedModel):
         query_embedding = F.normalize(query_embedding,p=2,dim=2)
         return query_embedding
     
-    def get_doc_embedding(self,input_ids,attention_mask):
+    def get_doc_embedding(self,input_ids,attention_mask,return_list=False):
         doc_embedding = self.bert(
             input_ids,attention_mask,
         ).last_hidden_state
         doc_embedding = self.linear(doc_embedding)
         
-        if self.mask_punctuation:
-            puntuation_mask = self.punctuation_mask(input_ids).unsqueeze(2)
-            doc_embedding = doc_embedding * puntuation_mask
+        
+        puntuation_mask = self.punctuation_mask(input_ids).unsqueeze(2)
+        doc_embedding = doc_embedding * puntuation_mask
 
         doc_embedding = F.normalize(doc_embedding,p=2,dim=2)
         
-        return doc_embedding
+        if not return_list:
+            return doc_embedding
+        else:
+            doc_embedding = doc_embedding.cpu().to(dtype=torch.float16)
+            puntuation_mask = puntuation_mask.cpu().bool().squeeze(-1)
+            doc_embedding = [d[puntuation_mask[idx]] for idx,d in enumerate(doc_embedding)]
+            return doc_embedding
+        
     
     def punctuation_mask(self,input_ids):
         mask = (input_ids.unsqueeze(-1) == self.mask_buffer).any(dim=-1)

@@ -2,7 +2,7 @@
 query_data_path: data/processed/queries.mmap
 pos_doc_data_path: data/processed/pos_docs.mmap
 neg_doc_data_path: data/processed/neg_docs.mmap
-
+num_samples: 39780811
 
 ## model
 similarity_metric: l2
@@ -22,3 +22,4 @@ seed: 12345
 gradient_accumulation_steps: 1
 val_check_interval: 4000
 fp16: true
+shuffle_train_set: false ## colbertv1 didn't shuffle

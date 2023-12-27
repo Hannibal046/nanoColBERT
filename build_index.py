@@ -1,50 +1,49 @@
 import faiss
 import argparse
 import os
-import numpy as np
+from tqdm import tqdm
+import torch
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--embedding_dir")
-    parser.add_argument("--dim")
-    parser.add_argument("--partitions")
-    parser.add_argument("--sample_ratio")
-
+    parser.add_argument("--embedding_dir",required=True)
+    parser.add_argument("--dim",type=int,default=128)
+    parser.add_argument("--sample_ratio",type=float,default=0.3)
+    parser.add_argument("--output_path",required=True)
+    parser.add_argument("--nlist",type=int,default=32768)
+    parser.add_argument("--m",type=int,default=16)
+    parser.add_argument("--nbits_per_idx",type=int,default=8)
     args = parser.parse_args()
 
-    embedding_files = [os.path.join(args.embedding_dir,x) for x in os.listdir(args.embedding_dir)]
-    embedding_files.sort(key=lambda x:os.path.basename(x).split(".")[0].split("_")[-1])
+    embedding_files = [os.path.join(args.embedding_dir,x) for x in os.listdir(args.embedding_dir) if x.endswith("pt")]
+    embedding_files.sort(key=lambda x:os.path.basename(x).split(".")[0].split("_")[-2:])
 
-    embeddings = [np.load(x) for x in embedding_files]
-    embeddings = np.concatenate(embeddings,axis=0)
+    embeddings_for_training = []
+    for file in embedding_files:
+        print("loading from ",file)
+        data = torch.load(file)
+        sampled_data = data[torch.randint(0, high=data.size(0), size=(int(data.size(0) * args.sample_ratio),))]
+        embeddings_for_training.append(sampled_data)
 
-    num_embeddings = embeddings.shape[0]
+    embeddings_for_training = torch.cat(embeddings_for_training,dim=0)
+    print(f"{embeddings_for_training.shape=}")
 
     ## build index
     quantizer = faiss.IndexFlatL2(args.dim)
-    index = faiss.IndexIVFPQ(quantizer, args.dim, args.partitions, 16, 8)
+    index = faiss.IndexIVFPQ(quantizer, args.dim, args.nlist, args.m, args.nbits_per_idx)
 
     ## training
     gpu_resource = faiss.StandardGpuResources()
-    co = faiss.GpuClonerOptions()
-    co.useFloat16 = True
-    co.useFloat16CoarseQuantizer = False
-    co.usePrecomputed = False
-    co.indicesOptions = faiss.INDICES_CPU
-    co.verbose = True
-    co.shard = True
-
-    gpu_quantizer = faiss.index_cpu_to_gpu(gpu_resource, 0, quantizer, co)
-    gpu_index = faiss.index_cpu_to_gpu(gpu_resource, 0, index, co)
-    
-    sampled_embeddings = embeddings[np.randint(0, high=num_embeddings, size=(int(num_embeddings * args.sample_ratio),))]
-    gpu_index.train(sampled_embeddings)
+    gpu_quantizer = faiss.index_cpu_to_gpu(gpu_resource, 0, quantizer)
+    gpu_index = faiss.index_cpu_to_gpu(gpu_resource, 0, index)
+    gpu_index.train(embeddings_for_training)
 
     ## add
-    batch_size = 10_000
-    for idx in range(0,num_embeddings,batch_size):
-        gpu_index.add(embeddings[idx:idx+batch_size,:])
+    for file in tqdm(embedding_files,desc='loading from embedding files'):
+        data = torch.load(file)
+        gpu_index.add(data)
+
     cpu_index = faiss.index_gpu_to_cpu(gpu_index)
 
     ## save
-    cpu_index.save(args.output_path)
+    faiss.write_index(cpu_index, args.output_path)
