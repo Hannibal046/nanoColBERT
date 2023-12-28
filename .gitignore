@@ -9,3 +9,5 @@ embedding
 __pycache__
 .vscode
 ranking.tsv
+bug.py
+model.txt

@@ -85,7 +85,7 @@ class MSMarcoDataset(torch.utils.data.Dataset):
         neg_docs = [x[2] for x in samples]
 
         query_input_ids = torch.from_numpy(np.stack(queries).astype(np.int32))
-        query_attention_mask = (query_input_ids != tokenizer.mask_token_id).int() ## not pad token
+        query_attention_mask = (query_input_ids != tokenizer.mask_token_id).int() ## not pad token, called *query augmentation* in the paper
 
         doc_input_ids = torch.from_numpy(np.stack(pos_docs+neg_docs).astype(np.int32))
         doc_input_ids = trim_padding(doc_input_ids,padding_id = tokenizer.pad_token_id)
@@ -117,6 +117,8 @@ def main():
         wandb_tracker = accelerator.get_tracker("wandb")
         LOG_DIR = wandb_tracker.run.dir
 
+    ## This is a little different from original implementation
+    ## https://github.com/stanford-futuredata/ColBERT/blob/706a7265b06c6b8de1e3236294394e5ada92134e/colbert/modeling/tokenization/query_tokenization.py#L57
     tokenizer = BertTokenizer.from_pretrained(args.base_model)
     q_mark,d_mark = "[Q]","[D]"
     additional_special_tokens = [q_mark,d_mark]
@@ -136,7 +138,7 @@ def main():
         )
     colbert.resize_token_embeddings(len(tokenizer))
     colbert.train()
-    colbert = torch.compile(colbert)
+    if torch.__version__.startswith("2"): colbert = torch.compile(colbert)
 
     train_dataset = MSMarcoDataset(
         args.query_data_path,
@@ -152,6 +154,7 @@ def main():
         collate_fn=train_collate_fn,
         num_workers=4,pin_memory=True
         )
+    ## there is no dev/test dataloader. Original ColBERT just optimize fixed steps
     
     
     no_decay = ["bias", "LayerNorm.weight"]
@@ -199,7 +202,8 @@ def main():
             with accelerator.accumulate(colbert):
                 with accelerator.autocast():
                     scores  = colbert(**batch).view(2,-1).permute(1,0) #[per_device_train_batch_size,2]
-                    labels = torch.zeros(scores.shape[0], dtype=torch.long, device=scores.device)
+                    ## since we always put positive docs before neg docs, check collate_fn
+                    labels = torch.zeros(scores.shape[0], dtype=torch.long, device=scores.device) 
                     loss = loss_fct(scores,labels)
                     total_loss += loss.item()
                 accelerator.backward(loss)

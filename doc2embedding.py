@@ -64,6 +64,7 @@ if __name__ == "__main__":
                     attention_mask = attention_mask,
                     return_list = True,
                 )
+            ## do not get lengths from attention_mask because the mask-punctuation operation inside colbert
             lengths = [doc.shape[0] for doc in doc_embedding]
 
             doc_embeddings.extend(doc_embedding)

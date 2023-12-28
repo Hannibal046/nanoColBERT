@@ -39,6 +39,7 @@ if __name__ == '__main__':
     gpu_index.train(embeddings_for_training)
 
     ## add
+    ## if OOM, try to split into small batches
     for file in tqdm(embedding_files,desc='loading from embedding files'):
         data = torch.load(file)
         gpu_index.add(data)

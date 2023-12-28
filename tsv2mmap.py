@@ -1,13 +1,14 @@
 from transformers import BertTokenizerFast
 import numpy as np
+from tqdm import tqdm
+import os
 
 def process_triplet(queries,poses,negs):
 
-    q_mark,d_mark = "[Q]","[D]"
     ## get query_input_ids
     queries = [q_mark+" "+query for query in queries]
     query_input_ids = tokenizer(queries,padding='max_length',truncation=True,return_tensors='pt',max_length=query_max_len)['input_ids']
-    query_input_ids[query_input_ids==tokenizer.pad_token_id] = tokenizer.mask_token_id
+    query_input_ids[query_input_ids==tokenizer.pad_token_id] = tokenizer.mask_token_id ## called *query augmentation* in the paper
 
     ## get_doc_input_ids
     poses = [d_mark+" "+pos for pos in poses]
@@ -36,12 +37,13 @@ if __name__ == "__main__":
             "additional_special_tokens":additional_special_tokens,
         }
     )
-
-    query_mmap = np.memmap('queries.mmap', dtype='int16',mode='w+',shape=(num_samples,query_max_len))
-    pos_mmap   = np.memmap("pos_docs.mmap",dtype='int16',mode='w+',shape=(num_samples,doc_max_len))
-    neg_mmap   = np.memmap("neg_docs.mmap",dtype='int16',mode='w+',shape=(num_samples,doc_max_len))
+    os.makedirs("data/processed",exist_ok=True)
+    query_mmap = np.memmap('data/processed/queries.mmap', dtype='int16',mode='w+',shape=(num_samples,query_max_len))
+    pos_mmap   = np.memmap("data/processed/pos_docs.mmap",dtype='int16',mode='w+',shape=(num_samples,doc_max_len))
+    neg_mmap   = np.memmap("data/processed/neg_docs.mmap",dtype='int16',mode='w+',shape=(num_samples,doc_max_len))
 
     total = 0
+    progress_bar = tqdm(range(num_samples),desc='processing triplet data...')
     with open(triplet_path) as f:
         queries,poses,negs = [],[],[]
         for line in f:
@@ -58,7 +60,7 @@ if __name__ == "__main__":
                 neg_mmap[  total:total+batch_size] = neg_input_ids.numpy().astype(np.int16)  
 
                 total += batch_size
-                print(total)
+                progress_bar.update(batch_size)
                 queries,poses,negs = [],[],[]
 
         if len(queries) > 0:

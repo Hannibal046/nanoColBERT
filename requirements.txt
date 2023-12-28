@@ -1,0 +1,8 @@
+accelerate==0.25.0
+# faiss==1.7.4
+numpy==1.24.4
+PyYAML==6.0.1
+# torch==2.1.2
+tqdm==4.66.1
+transformers==4.36.2
+wandb==0.16.1

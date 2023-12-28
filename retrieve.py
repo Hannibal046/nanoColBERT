@@ -1,3 +1,6 @@
+# ================== #
+# This is an unoptimized version of colbert-v1 retrieval 
+# ================== #
 import argparse
 import os
 import pickle
@@ -21,15 +24,7 @@ if __name__ == "__main__":
     parser.add_argument("--save_k",type=int,default=1000)
     parser.add_argument("--output_path")
 
-    args = parser.parse_args(
-        [
-            "--embedding_dir","embedding/colbert/",
-            "--faiss_index_path","embedding/colbert/ivfpq.faiss.index",
-            "--pretrained_model_path","wandb/run-20231225_151828-88x0myde/files/step-400000",
-            "--query_path","../ColBERT/data/queries.dev.small.tsv",
-            "--output_path","ranking.tsv"
-        ]
-        )
+    args = parser.parse_args()
     
     device = torch.device("cuda:0")
 
@@ -37,7 +32,7 @@ if __name__ == "__main__":
     colbert.eval()
     colbert = colbert.to(device)
     tokenizer = BertTokenizer.from_pretrained(args.pretrained_model_path)
-    dim = colbert.config.dim
+    DIM = colbert.config.dim
     
     embedding_files = [os.path.join(args.embedding_dir,x) for x in os.listdir(args.embedding_dir) if x.endswith("pt")]
     embedding_files.sort(key=lambda x:os.path.basename(x).split(".")[0].split("_")[-2:])
@@ -55,6 +50,8 @@ if __name__ == "__main__":
     for file in embedding_files:
         print(f"loading {file}")
         all_token_embeddings.append(torch.load(file))
+    dummy_embeddings = torch.zeros((args.doc_max_len,DIM)) ## since we select each doc with doc_max_len
+    all_token_embeddings.append(dummy_embeddings)
     all_token_embeddings = torch.cat(all_token_embeddings,dim=0)
     print("total_embeddings.shape=",all_token_embeddings.shape)
 
@@ -64,7 +61,7 @@ if __name__ == "__main__":
     all_length = [x for y in all_length for x in y]
 
     NUM_DOCS = len(all_length)
-    NUM_EMBEDDINGS = all_token_embeddings.shape[0]
+    NUM_EMBEDDINGS = all_token_embeddings.shape[0] - args.doc_max_len
 
     embedding2pid = [0 for _ in range(NUM_EMBEDDINGS)]
     pid2embedding = [0 for _ in range(NUM_DOCS)]
