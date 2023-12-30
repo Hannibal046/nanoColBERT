@@ -5,7 +5,7 @@ This repo provides a simple implementation of [ColBERT-v1](https://arxiv.org/abs
 The official github repo: [Link](https://github.com/stanford-futuredata/ColBERT) (v1 branch)
 
 ColBERT is a powerful late-interaction model that could perform both retrieval and reranking.
-![ColBERT](ColBERT.png)
+![ColBERT](assets/ColBERT.png)
 ## Get Started
 ```
 conda create -n nanoColBERT python=3.8 && conda activate nanoColBERT
@@ -19,7 +19,8 @@ accelerate config
 ```
 After everything setup, just launch the whole process with:
 ```bash
-bash run_colbert.sh
+bash scripts/download.sh
+bash scripts/run_colbert.sh
 ```
 It would first download the data, preprocess the data, train the model, index with faiss, conduct retrieval and calculate the score.
 

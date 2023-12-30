@@ -1,6 +1,3 @@
-## download data first
-bash download.sh
-
 ## make large tsv file to memory-mapping file for efficient pytorch indexing
 python tsv2mmap.py
 
